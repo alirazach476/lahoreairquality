@@ -1,0 +1,4 @@
+# Dagster workspace — load definitions from the local Python package.
+load_from:
+  - python_module:
+      module_name: lahore_aqi_dagster.definitions

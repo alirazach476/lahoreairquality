@@ -1,0 +1,100 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+*.cover
+.cache/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.vite/
+.vercel/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# dbt
+dbt/lahore_air_quality/target/
+dbt/lahore_air_quality/dbt_packages/
+dbt/lahore_air_quality/logs/
+dbt/lahore_air_quality/.user.yml
+
+# Dagster / MLflow
+dagster_home/
+.dagster/
+orchestration/dagster/.dagster_home/
+orchestration/dagster/tmp*/
+mlruns/
+mlartifacts/
+*.db
+
+# Data artifacts (keep directory layout; ignore contents except samples policy)
+data/raw/**
+!data/raw/.gitkeep
+!data/raw/README.md
+data/processed/**
+!data/processed/.gitkeep
+!data/processed/README.md
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker volumes / local state
+.docker-data/
+postgres-data/
+minio-data/
+redpanda-data/
+
+# Logs and temp
+*.log
+tmp/
+temp/
+.tmp/

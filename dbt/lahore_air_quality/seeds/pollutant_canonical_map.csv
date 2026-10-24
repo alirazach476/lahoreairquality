@@ -1,0 +1,14 @@
+source_pollutant,canonical_pollutant,notes
+pm25,pm25,Already canonical
+pm2.5,pm25,Common OpenAQ display form
+pm_2_5,pm25,Snake variant
+pm10,pm10,Already canonical
+o3,o3,Already canonical
+ozone,o3,Alias
+no2,no2,Already canonical
+nitrogen dioxide,no2,Alias
+so2,so2,Already canonical
+sulfur dioxide,so2,Alias
+sulphur dioxide,so2,British spelling
+co,co,Already canonical
+carbon monoxide,co,Alias

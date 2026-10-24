@@ -1,0 +1,37 @@
+version: 2
+
+seeds:
+  - name: aqi_breakpoints
+    description: >
+      US EPA AQI concentration breakpoints (including 2024 PM2.5 updates).
+      Source of truth for `int_air_quality_aqi_subindex` and `mart_lahore_aqi`.
+    columns:
+      - name: pollutant
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co']
+              quote: true
+      - name: unit
+        tests: [not_null]
+      - name: breakpoint_low
+        tests: [not_null]
+      - name: breakpoint_high
+        tests: [not_null]
+      - name: aqi_low
+        tests: [not_null]
+      - name: aqi_high
+        tests: [not_null]
+
+  - name: pollutant_canonical_map
+    description: >
+      Optional alias → canonical pollutant map (complements the normalize macro).
+    columns:
+      - name: source_pollutant
+        tests: [not_null, unique]
+      - name: canonical_pollutant
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co']
+              quote: true

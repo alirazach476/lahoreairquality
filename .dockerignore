@@ -1,0 +1,37 @@
+# Keep image builds small; never bake local secrets into layers.
+.git
+.github
+.venv
+venv
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+.env
+.env.*
+!.env.example
+**/.DS_Store
+**/Thumbs.db
+
+# Frontend build caches (image builds npm ci itself).
+**/node_modules
+apps/dashboard/dist
+
+# Local runtime / training artifacts (mounted as volumes at run time).
+ml/training/artifacts
+ml/features/datasets
+mlruns
+data
+agent-transcripts
+
+# dbt packages are installed via `dbt deps` in the image/job.
+dbt/lahore_air_quality/dbt_packages
+dbt/lahore_air_quality/target
+dbt/lahore_air_quality/logs
+
+# Dagster local sqlite (volume-mounted in Compose).
+orchestration/dagster/.dagster_home

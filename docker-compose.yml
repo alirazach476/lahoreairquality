@@ -1,0 +1,481 @@
+# Lahore Air Quality Intelligence Platform — full local stack.
+#
+# Required application services only (plus one-shot init/migrate helpers).
+# Redpanda Console is optional: enable with --profile devtools.
+# dbt / training are one-shot tools: docker compose run --rm dbt|train ...
+#
+#   cp .env.example .env
+#   docker compose up -d --build
+#   docker compose down
+#   docker compose logs -f
+#
+# Production-lean overrides: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Commands: docs/local-stack.md
+
+name: lahore-air-quality
+
+x-platform-env: &platform-env
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ${POSTGRES_DB}
+  POSTGRES_USER: ${POSTGRES_USER}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+  AWS_REGION: ${AWS_REGION:-us-east-1}
+  S3_ENDPOINT_URL: http://minio:9090
+  S3_BUCKET: ${S3_BUCKET}
+  REDPANDA_BROKERS: redpanda:9092
+  REDPANDA_TOPIC_AIR_QUALITY: ${REDPANDA_TOPIC_AIR_QUALITY:-aq.raw}
+  REDPANDA_TOPIC_WEATHER: ${REDPANDA_TOPIC_WEATHER:-weather.raw}
+  REDPANDA_CONSUMER_GROUP: ${REDPANDA_CONSUMER_GROUP:-lahore-aqi-consumer}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  LOG_JSON: ${LOG_JSON:-true}
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+
+services:
+  postgres:
+    build:
+      context: ./infrastructure/docker/postgres
+    image: lahore-aqi-postgres:16
+    container_name: lahore-aqi-postgres
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - wal_compression=on
+      - -c
+      - random_page_cost=1.1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # S3-compatible object store (Adobe S3Mock). Used when MinIO images/binaries
+  # are unavailable on the host registry. API is path-style on container port 9090.
+  minio:
+    image: adobe/s3mock:3.12.0
+    container_name: lahore-aqi-minio
+    restart: unless-stopped
+    environment:
+      initialBuckets: ${S3_BUCKET}
+      COM_ADOBE_TESTING_S3MOCK_STORE_REGION: ${AWS_REGION:-us-east-1}
+      # Retain objects across restarts when volume is mounted.
+      retainFilesOnExit: "true"
+      root: /tmp/s3mock
+    ports:
+      - "${MINIO_API_PORT:-9000}:9090"
+    volumes:
+      - minio_data:/tmp/s3mock
+    # S3Mock has no curl; give it a short start window then treat as ready.
+    healthcheck:
+      test: ["CMD-SHELL", "true"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 8s
+
+  # One-shot marker so depends_on (service_completed_successfully) stays valid.
+  minio-init:
+    image: hello-world:latest
+    container_name: lahore-aqi-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.4
+    container_name: lahore-aqi-redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --mode
+      - dev-container
+      - --smp
+      - "1"
+      - --default-log-level=warn
+    ports:
+      - "${REDPANDA_KAFKA_PORT:-19092}:19092"
+      - "${REDPANDA_SCHEMA_REGISTRY_PORT:-18081}:18081"
+      - "${REDPANDA_PANDAPROXY_PORT:-18082}:18082"
+      - "${REDPANDA_ADMIN_PORT:-19644}:9644"
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy'"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  redpanda-init-topics:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.4
+    container_name: lahore-aqi-redpanda-init
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    env_file: [.env]
+    environment:
+      REDPANDA_TOPIC_AIR_QUALITY: ${REDPANDA_TOPIC_AIR_QUALITY:-aq.raw}
+      REDPANDA_TOPIC_WEATHER: ${REDPANDA_TOPIC_WEATHER:-weather.raw}
+    restart: "no"
+    entrypoint: ["/bin/bash", "-lc"]
+    command:
+      - |
+        set -euo pipefail
+        echo "Creating topics: $${REDPANDA_TOPIC_AIR_QUALITY} $${REDPANDA_TOPIC_WEATHER}"
+        rpk topic create "$${REDPANDA_TOPIC_AIR_QUALITY}" -p 3 -r 1 --brokers redpanda:9092 || true
+        rpk topic create "$${REDPANDA_TOPIC_WEATHER}" -p 3 -r 1 --brokers redpanda:9092 || true
+        rpk topic list --brokers redpanda:9092
+
+  # Optional Kafka UI — not required by the application.
+  redpanda-console:
+    profiles: ["devtools"]
+    image: docker.redpanda.com/redpandadata/console:v2.7.2
+    container_name: lahore-aqi-redpanda-console
+    restart: unless-stopped
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redpanda-init-topics:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml
+        /app/console
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda:9092"]
+        schemaRegistry:
+          enabled: true
+          urls: ["http://redpanda:8081"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda:9644"]
+    ports:
+      - "${REDPANDA_CONSOLE_PORT:-8085}:8080"
+
+  migrate:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/consumer/Dockerfile
+    image: lahore-aqi-consumer:local
+    container_name: lahore-aqi-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: [.env]
+    environment:
+      <<: *platform-env
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+
+  poller:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/poller/Dockerfile
+    image: lahore-aqi-poller:local
+    container_name: lahore-aqi-poller
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redpanda-init-topics:
+        condition: service_completed_successfully
+    env_file: [.env]
+    environment:
+      <<: *platform-env
+      OPENAQ_API_KEY: ${OPENAQ_API_KEY:-}
+      OPENAQ_BASE_URL: ${OPENAQ_BASE_URL:-https://api.openaq.org}
+      OPENMETEO_BASE_URL: ${OPENMETEO_BASE_URL:-https://api.open-meteo.com}
+      OPENMETEO_ARCHIVE_BASE_URL: ${OPENMETEO_ARCHIVE_BASE_URL:-https://archive-api.open-meteo.com}
+      LAHORE_LATITUDE: ${LAHORE_LATITUDE:-31.5204}
+      LAHORE_LONGITUDE: ${LAHORE_LONGITUDE:-74.3587}
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-300}
+      POLL_ONCE: ${POLL_ONCE:-false}
+      POLL_ENABLE_OPENAQ: ${POLL_ENABLE_OPENAQ:-true}
+      POLL_ENABLE_OPENMETEO: ${POLL_ENABLE_OPENMETEO:-true}
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  consumer:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/consumer/Dockerfile
+    image: lahore-aqi-consumer:local
+    container_name: lahore-aqi-consumer
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      minio:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+      redpanda:
+        condition: service_healthy
+      redpanda-init-topics:
+        condition: service_completed_successfully
+    env_file: [.env]
+    environment:
+      <<: *platform-env
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/mlflow/Dockerfile
+    image: lahore-aqi-mlflow:local
+    container_name: lahore-aqi-mlflow
+    restart: unless-stopped
+    environment:
+      MLFLOW_HOST: 0.0.0.0
+      MLFLOW_PORT: "5000"
+      MLFLOW_BACKEND_STORE_URI: file:///mlflow/db
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: /mlflow/artifacts
+    ports:
+      - "${MLFLOW_PORT:-5000}:5000"
+    volumes:
+      - mlflow_data:/mlflow/db
+      - mlflow_artifacts:/mlflow/artifacts
+
+  dagster-webserver:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/dagster/Dockerfile
+    image: lahore-aqi-dagster:local
+    container_name: lahore-aqi-dagster-webserver
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+      redpanda-init-topics:
+        condition: service_completed_successfully
+      mlflow:
+        condition: service_healthy
+    env_file: [.env]
+    environment:
+      <<: *platform-env
+      OPENAQ_API_KEY: ${OPENAQ_API_KEY:-}
+      OPENAQ_BASE_URL: ${OPENAQ_BASE_URL:-https://api.openaq.org}
+      OPENMETEO_BASE_URL: ${OPENMETEO_BASE_URL:-https://api.open-meteo.com}
+      OPENMETEO_ARCHIVE_BASE_URL: ${OPENMETEO_ARCHIVE_BASE_URL:-https://archive-api.open-meteo.com}
+      LAHORE_LATITUDE: ${LAHORE_LATITUDE:-31.5204}
+      LAHORE_LONGITUDE: ${LAHORE_LONGITUDE:-74.3587}
+      DAGSTER_HOME: /app/orchestration/dagster
+      DBT_PROJECT_DIR: /app/dbt/lahore_air_quality
+      DBT_PROFILES_DIR: /app/dbt/lahore_air_quality
+    ports:
+      - "${DAGSTER_PORT:-3000}:3000"
+    volumes:
+      - dagster_home:/app/orchestration/dagster/.dagster_home
+      - ml_artifacts:/app/ml/training/artifacts
+    command:
+      ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:3000/server_info >/dev/null || exit 1",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  dagster-daemon:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/dagster/Dockerfile
+    image: lahore-aqi-dagster:local
+    container_name: lahore-aqi-dagster-daemon
+    restart: unless-stopped
+    depends_on:
+      dagster-webserver:
+        condition: service_healthy
+    env_file: [.env]
+    environment:
+      <<: *platform-env
+      OPENAQ_API_KEY: ${OPENAQ_API_KEY:-}
+      OPENAQ_BASE_URL: ${OPENAQ_BASE_URL:-https://api.openaq.org}
+      OPENMETEO_BASE_URL: ${OPENMETEO_BASE_URL:-https://api.open-meteo.com}
+      OPENMETEO_ARCHIVE_BASE_URL: ${OPENMETEO_ARCHIVE_BASE_URL:-https://archive-api.open-meteo.com}
+      LAHORE_LATITUDE: ${LAHORE_LATITUDE:-31.5204}
+      LAHORE_LONGITUDE: ${LAHORE_LONGITUDE:-74.3587}
+      DAGSTER_HOME: /app/orchestration/dagster
+      DBT_PROJECT_DIR: /app/dbt/lahore_air_quality
+      DBT_PROFILES_DIR: /app/dbt/lahore_air_quality
+    volumes:
+      - dagster_home:/app/orchestration/dagster/.dagster_home
+      - ml_artifacts:/app/ml/training/artifacts
+    command: ["dagster-daemon", "run"]
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  api:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api/Dockerfile
+    image: lahore-aqi-api:local
+    container_name: lahore-aqi-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file: [.env]
+    environment:
+      <<: *platform-env
+      API_HOST: 0.0.0.0
+      API_PORT: "8000"
+      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173}
+      FORECAST_ARTIFACT_DIR: /app/ml/training/artifacts/xgboost
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ml_artifacts:/app/ml/training/artifacts
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/dashboard/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    image: lahore-aqi-dashboard:local
+    container_name: lahore-aqi-dashboard
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${DASHBOARD_PORT:-8080}:8080"
+
+  # --- Tooling (not started by `compose up`; use `compose run`) ---
+
+  dbt:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: infrastructure/docker/dbt/Dockerfile
+    image: lahore-aqi-dbt:local
+    container_name: lahore-aqi-dbt
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file: [.env]
+    environment:
+      <<: *platform-env
+      DBT_PROFILES_DIR: /app/dbt/lahore_air_quality
+      DBT_PROJECT_DIR: /app/dbt/lahore_air_quality
+    restart: "no"
+    working_dir: /app/dbt/lahore_air_quality
+
+  train:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: infrastructure/docker/ml/Dockerfile
+    image: lahore-aqi-ml:local
+    container_name: lahore-aqi-train
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      mlflow:
+        condition: service_healthy
+    env_file: [.env]
+    environment:
+      <<: *platform-env
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    volumes:
+      - ml_artifacts:/app/ml/training/artifacts
+      - ml_features:/app/ml/features/datasets
+    restart: "no"
+
+  # Unit/postgres tests (excludes live integration + Compose smoke).
+  test:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: infrastructure/docker/test/Dockerfile
+    image: lahore-aqi-test:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file: [.env]
+    environment:
+      <<: *platform-env
+      RUN_EXTERNAL_API_TESTS: "0"
+    restart: "no"
+
+volumes:
+  postgres_data:
+  minio_data:
+  redpanda_data:
+  dagster_home:
+  mlflow_data:
+  mlflow_artifacts:
+  ml_artifacts:
+  ml_features:

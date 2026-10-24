@@ -1,0 +1,18 @@
+# Minimal Dagster 1.9 instance config for local / Compose.
+# Secrets stay in process environment / repo-root `.env`.
+
+storage:
+  sqlite:
+    base_dir: .dagster_home/storage
+
+telemetry:
+  enabled: false
+
+nux:
+  enabled: false
+
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+  config:
+    max_concurrent_runs: 8

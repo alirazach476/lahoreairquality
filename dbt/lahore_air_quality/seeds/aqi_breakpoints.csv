@@ -1,0 +1,36 @@
+pollutant,unit,breakpoint_low,breakpoint_high,aqi_low,aqi_high,category
+pm25,µg/m³,0.0,9.0,0,50,Good
+pm25,µg/m³,9.1,35.4,51,100,Moderate
+pm25,µg/m³,35.5,55.4,101,150,Unhealthy for Sensitive Groups
+pm25,µg/m³,55.5,125.4,151,200,Unhealthy
+pm25,µg/m³,125.5,225.4,201,300,Very Unhealthy
+pm25,µg/m³,225.5,325.4,301,500,Hazardous
+pm10,µg/m³,0,54,0,50,Good
+pm10,µg/m³,55,154,51,100,Moderate
+pm10,µg/m³,155,254,101,150,Unhealthy for Sensitive Groups
+pm10,µg/m³,255,354,151,200,Unhealthy
+pm10,µg/m³,355,424,201,300,Very Unhealthy
+pm10,µg/m³,425,604,301,500,Hazardous
+o3,ppm,0.000,0.054,0,50,Good
+o3,ppm,0.055,0.070,51,100,Moderate
+o3,ppm,0.071,0.085,101,150,Unhealthy for Sensitive Groups
+o3,ppm,0.086,0.105,151,200,Unhealthy
+o3,ppm,0.106,0.200,201,300,Very Unhealthy
+co,ppm,0.0,4.4,0,50,Good
+co,ppm,4.5,9.4,51,100,Moderate
+co,ppm,9.5,12.4,101,150,Unhealthy for Sensitive Groups
+co,ppm,12.5,15.4,151,200,Unhealthy
+co,ppm,15.5,30.4,201,300,Very Unhealthy
+co,ppm,30.5,50.4,301,500,Hazardous
+so2,ppb,0,35,0,50,Good
+so2,ppb,36,75,51,100,Moderate
+so2,ppb,76,185,101,150,Unhealthy for Sensitive Groups
+so2,ppb,186,304,151,200,Unhealthy
+so2,ppb,305,604,201,300,Very Unhealthy
+so2,ppb,605,1004,301,500,Hazardous
+no2,ppb,0,53,0,50,Good
+no2,ppb,54,100,51,100,Moderate
+no2,ppb,101,360,101,150,Unhealthy for Sensitive Groups
+no2,ppb,361,649,151,200,Unhealthy
+no2,ppb,650,1249,201,300,Very Unhealthy
+no2,ppb,1250,2049,301,500,Hazardous

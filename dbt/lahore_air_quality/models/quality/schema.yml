@@ -1,0 +1,119 @@
+version: 2
+
+models:
+  - name: int_air_quality_classified
+    description: >
+      Every staging air-quality row with quality flags and quality_class
+      (valid | suspect | invalid). Suspicious/invalid rows are retained —
+      never deleted. Mirrors lahore_air_quality.quality / docs/data-quality.md.
+    columns:
+      - name: observation_sk
+        tests: [not_null]
+      - name: quality_class
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['valid', 'suspect', 'invalid']
+              quote: true
+      - name: is_invalid
+        tests: [not_null]
+      - name: is_suspect
+        tests: [not_null]
+    tests:
+      # invalid beats suspect: if any invalid flag, class must be invalid
+      - dbt_utils.expression_is_true:
+          expression: "not (is_invalid and quality_class <> 'invalid')"
+      - dbt_utils.expression_is_true:
+          expression: "not (not is_invalid and is_suspect and quality_class <> 'suspect')"
+      - dbt_utils.expression_is_true:
+          expression: "not (not is_invalid and not is_suspect and quality_class <> 'valid')"
+      # Rule: missing_timestamp → invalid
+      - dbt_utils.expression_is_true:
+          expression: "not (flag_missing_timestamp and quality_class <> 'invalid')"
+      # Rule: missing_value → invalid
+      - dbt_utils.expression_is_true:
+          expression: "not (flag_missing_value and quality_class <> 'invalid')"
+      # Rule: future_timestamp invalid band
+      - dbt_utils.expression_is_true:
+          expression: "not (flag_future_invalid and quality_class <> 'invalid')"
+      # Rule: negative_concentration → invalid
+      - dbt_utils.expression_is_true:
+          expression: "not (flag_negative_concentration and quality_class <> 'invalid')"
+      # Rule: unexpected_pollutant → invalid
+      - dbt_utils.expression_is_true:
+          expression: "not (flag_unexpected_pollutant and quality_class <> 'invalid')"
+      # Rule: unexpected_unit → invalid
+      - dbt_utils.expression_is_true:
+          expression: "not (flag_unexpected_unit and quality_class <> 'invalid')"
+      # Rule: abnormal invalid ceiling
+      - dbt_utils.expression_is_true:
+          expression: "not (flag_abnormal_invalid and quality_class <> 'invalid')"
+      # Rule: duplicate → at least suspect (unless also invalid)
+      - dbt_utils.expression_is_true:
+          expression: >
+            not (is_duplicate and not is_invalid and quality_class <> 'suspect')
+      # Rule: missing_weather → at least suspect (unless also invalid)
+      - dbt_utils.expression_is_true:
+          expression: >
+            not (missing_weather and not is_invalid and quality_class <> 'suspect')
+      # Rule: future suspect band
+      - dbt_utils.expression_is_true:
+          expression: >
+            not (flag_future_suspect and not is_invalid and quality_class <> 'suspect')
+      # Rule: abnormal suspect band
+      - dbt_utils.expression_is_true:
+          expression: >
+            not (flag_abnormal_suspect and not is_invalid and quality_class <> 'suspect')
+
+  - name: int_weather_classified
+    description: >
+      Weather staging rows with quality_class. Invalid/suspect retained.
+    columns:
+      - name: observation_sk
+        tests: [not_null]
+      - name: quality_class
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['valid', 'suspect', 'invalid']
+              quote: true
+    tests:
+      - dbt_utils.expression_is_true:
+          expression: "not (flag_missing_timestamp and quality_class <> 'invalid')"
+      - dbt_utils.expression_is_true:
+          expression: "not (flag_future_invalid and quality_class <> 'invalid')"
+      - dbt_utils.expression_is_true:
+          expression: "not (flag_abnormal_invalid and quality_class <> 'invalid')"
+      - dbt_utils.expression_is_true:
+          expression: >
+            not (is_duplicate and not is_invalid and quality_class <> 'suspect')
+
+  - name: mart_data_quality_report
+    description: >
+      Observability snapshot: record counts, duplicates, nulls, freshness,
+      sensor activity, min/max, missing intervals. Classification only —
+      no deletes.
+    columns:
+      - name: generated_at
+        tests: [not_null]
+      - name: record_count
+        tests: [not_null]
+      - name: valid_count
+        tests: [not_null]
+      - name: suspect_count
+        tests: [not_null]
+      - name: invalid_count
+        tests: [not_null]
+      - name: duplicate_row_count
+        tests: [not_null]
+      - name: is_stale
+        tests: [not_null]
+      - name: stations_seen
+        tests: [not_null]
+      - name: missing_interval_count
+        tests: [not_null]
+    tests:
+      - dbt_utils.expression_is_true:
+          expression: "valid_count + suspect_count + invalid_count = record_count"
+      - dbt_utils.expression_is_true:
+          expression: "record_count >= 0"

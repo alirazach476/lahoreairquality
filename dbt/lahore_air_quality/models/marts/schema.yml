@@ -1,0 +1,155 @@
+version: 2
+
+models:
+  - name: mart_air_quality_hourly
+    description: >
+      Hourly station × pollutant aggregates for dashboards.
+      Lineage: int_air_quality_weather_joined → marts.
+      Incremental merge on (station_id, pollutant, observed_hour, source_name).
+    columns:
+      - name: station_id
+        tests: [not_null]
+      - name: pollutant
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co']
+              quote: true
+      - name: observed_hour
+        tests: [not_null]
+      - name: source_name
+        tests: [not_null]
+      - name: value_avg
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+      - name: observation_count
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+              inclusive: true
+      - name: aqi_subindex_max
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 500
+              config:
+                where: "aqi_subindex_max is not null"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - station_id
+            - pollutant
+            - observed_hour
+            - source_name
+
+  - name: mart_weather_hourly
+    description: >
+      Hourly weather aggregates at rounded lat/lon.
+      Lineage: int_weather_metrics_normalized → marts.
+    columns:
+      - name: latitude
+        tests: [not_null]
+      - name: longitude
+        tests: [not_null]
+      - name: observed_hour
+        tests: [not_null]
+      - name: source_name
+        tests: [not_null]
+      - name: observation_count
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 1
+              inclusive: true
+      - name: relative_humidity_pct_avg
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              config:
+                where: "relative_humidity_pct_avg is not null"
+      - name: temperature_c_avg
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: -90
+              max_value: 60
+              config:
+                where: "temperature_c_avg is not null"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - latitude
+            - longitude
+            - observed_hour
+            - source_name
+
+  - name: mart_lahore_aqi
+    description: >
+      City-level Lahore AQI by UTC hour (max pollutant sub-index).
+      Includes optional PM2.5 24-hour rolling mean for EPA-aligned reporting.
+    columns:
+      - name: observed_hour
+        tests: [not_null, unique]
+      - name: aqi
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 500
+      - name: aqi_category
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - Good
+                - Moderate
+                - Unhealthy for Sensitive Groups
+                - Unhealthy
+                - Very Unhealthy
+                - Hazardous
+              quote: true
+      - name: dominant_pollutant
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co']
+              quote: true
+
+  - name: mart_air_quality_features
+    description: >
+      Wide station-hour feature table (pollutant pivot + weather + city AQI).
+      Prepared for analytics and future ML — no model training in this layer.
+    columns:
+      - name: station_id
+        tests: [not_null]
+      - name: observed_hour
+        tests:
+          - not_null
+          - relationships:
+              to: ref('mart_lahore_aqi')
+              field: observed_hour
+              config:
+                where: "city_aqi is not null"
+      - name: station_aqi
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 500
+              config:
+                where: "station_aqi is not null"
+      - name: pm25
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 2000
+              config:
+                where: "pm25 is not null"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - station_id
+            - observed_hour

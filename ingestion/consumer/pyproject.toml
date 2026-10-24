@@ -1,0 +1,28 @@
+[project]
+name = "lahore-aqi-consumer"
+version = "0.1.0"
+description = "Redpanda consumers that archive raw JSON and load PostgreSQL."
+requires-python = ">=3.11"
+dependencies = [
+  "confluent-kafka>=2.3",
+  "boto3>=1.34",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "sqlalchemy>=2.0",
+  "psycopg[binary]>=3.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+lahore-aqi-consumer = "lahore_aqi_consumer.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lahore_aqi_consumer"]

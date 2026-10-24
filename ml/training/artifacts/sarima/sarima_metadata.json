@@ -1,0 +1,121 @@
+{
+  "created_at_utc": "2026-10-24T09:49:51.477302+00:00",
+  "model": "sarima_o(1, 0, 0)_s(1, 0, 0, 12)",
+  "station_id": "S1",
+  "target_col": "pm25",
+  "horizon": 1,
+  "forecast_mode": "one_step_filter",
+  "order": [
+    1,
+    0,
+    0
+  ],
+  "seasonal_order": [
+    1,
+    0,
+    0,
+    12
+  ],
+  "trend": null,
+  "train_aic": -906.5045941594831,
+  "n_train": 56,
+  "n_validation": 8,
+  "n_fit": 64,
+  "n_test": 16,
+  "train_end": "2026-01-03T08:00:00+00:00",
+  "validation_end": "2026-01-03T16:00:00+00:00",
+  "select_from_candidates": false,
+  "metrics": [
+    {
+      "model": "sarima_o(1, 0, 0)_s(1, 0, 0, 12)",
+      "split": "test",
+      "target": "pm25",
+      "horizon": 1,
+      "mae": 3.062168500234108e-05,
+      "rmse": 3.062172489151677e-05,
+      "mape": 5.75052986779332e-07,
+      "n_obs": 16,
+      "n_mape": 16,
+      "mape_skipped_near_zero": 0,
+      "notes": "one_step_filter"
+    },
+    {
+      "model": "naive_last_value_h1",
+      "split": "test",
+      "target": "pm25",
+      "horizon": 1,
+      "mae": 3.424999999999998,
+      "rmse": 3.7458468195067534,
+      "mape": 0.06452771786525131,
+      "n_obs": 16,
+      "n_mape": 16,
+      "mape_skipped_near_zero": 0,
+      "notes": "reference_baseline"
+    }
+  ],
+  "comparison_vs_naive_mae": "sarima",
+  "note": "Do not claim SARIMA superiority unless comparison_vs_naive_mae == 'sarima' on measured metrics.",
+  "config": {
+    "order": [
+      1,
+      0,
+      0
+    ],
+    "seasonal_order": [
+      1,
+      0,
+      0,
+      12
+    ],
+    "trend": null,
+    "enforce_stationarity": false,
+    "enforce_invertibility": false,
+    "maxiter": 50,
+    "select_from_candidates": false,
+    "order_candidates": [
+      [
+        [
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          1,
+          24
+        ]
+      ],
+      [
+        [
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          0,
+          1,
+          24
+        ]
+      ],
+      [
+        [
+          2,
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          1,
+          24
+        ]
+      ]
+    ],
+    "horizon": 1,
+    "target_col": "pm25",
+    "mape_epsilon": 1e-08
+  },
+  "training_duration_seconds": 0.483754100000624
+}

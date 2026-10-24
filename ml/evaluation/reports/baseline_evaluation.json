@@ -1,0 +1,91 @@
+{
+  "source": "synthetic:make_synthetic_mart_frame",
+  "value_col": "pm25",
+  "horizon": 1,
+  "season": 24,
+  "split": {
+    "train_fraction": 0.7,
+    "validation_fraction": 0.15,
+    "test_fraction": 0.15
+  },
+  "rows": [
+    {
+      "model": "naive_last_value_h1",
+      "split": "train",
+      "target": "pm25",
+      "horizon": 1,
+      "mae": 5.870981570499766,
+      "rmse": 7.031328871395979,
+      "mape": 0.1937932346624951,
+      "n_obs": 334,
+      "n_mape": 334,
+      "mape_skipped_near_zero": 0,
+      "notes": ""
+    },
+    {
+      "model": "seasonal_naive_s24",
+      "split": "train",
+      "target": "pm25",
+      "horizon": 1,
+      "mae": 3.3323888116552953,
+      "rmse": 4.221846130007568,
+      "mape": 0.11648701519712532,
+      "n_obs": 288,
+      "n_mape": 288,
+      "mape_skipped_near_zero": 0,
+      "notes": "season=24"
+    },
+    {
+      "model": "naive_last_value_h1",
+      "split": "validation",
+      "target": "pm25",
+      "horizon": 1,
+      "mae": 5.70153917442706,
+      "rmse": 6.831376345628032,
+      "mape": 0.14428161849344662,
+      "n_obs": 72,
+      "n_mape": 72,
+      "mape_skipped_near_zero": 0,
+      "notes": ""
+    },
+    {
+      "model": "seasonal_naive_s24",
+      "split": "validation",
+      "target": "pm25",
+      "horizon": 1,
+      "mae": 3.435392206170535,
+      "rmse": 4.2608623234854965,
+      "mape": 0.09040110839430396,
+      "n_obs": 72,
+      "n_mape": 72,
+      "mape_skipped_near_zero": 0,
+      "notes": "season=24"
+    },
+    {
+      "model": "naive_last_value_h1",
+      "split": "test",
+      "target": "pm25",
+      "horizon": 1,
+      "mae": 5.306424503231244,
+      "rmse": 6.621048918342709,
+      "mape": 0.18595957292827325,
+      "n_obs": 72,
+      "n_mape": 72,
+      "mape_skipped_near_zero": 0,
+      "notes": ""
+    },
+    {
+      "model": "seasonal_naive_s24",
+      "split": "test",
+      "target": "pm25",
+      "horizon": 1,
+      "mae": 3.3442001114474924,
+      "rmse": 4.184042589682832,
+      "mape": 0.12412394932249349,
+      "n_obs": 72,
+      "n_mape": 72,
+      "mape_skipped_near_zero": 0,
+      "notes": "season=24"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+name: lahore_air_quality
+version: "0.1.0"
+config-version: 2
+profile: lahore_air_quality
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+docs-paths: ["docs"]
+
+clean-targets:
+  - target
+  - dbt_packages
+  - logs
+
+vars:
+  # Lookback used by incremental marts when no prior rows exist.
+  mart_lookback_days: 30
+  # Canonical pollutant codes accepted after normalization.
+  accepted_pollutants: ["pm25", "pm10", "o3", "no2", "so2", "co"]
+
+models:
+  lahore_air_quality:
+    +persist_docs:
+      relation: true
+      columns: true
+    staging:
+      +schema: staging
+      +materialized: view
+      +docs:
+        node_color: "#A0AEC0"
+    intermediate:
+      +schema: intermediate
+      +materialized: view
+      +docs:
+        node_color: "#63B3ED"
+    marts:
+      +schema: marts
+      +materialized: table
+      +docs:
+        node_color: "#48BB78"
+    quality:
+      +schema: quality
+      +materialized: table
+      +docs:
+        node_color: "#ED8936"
+
+seeds:
+  lahore_air_quality:
+    +schema: seeds
+    aqi_breakpoints:
+      +column_types:
+        breakpoint_low: numeric
+        breakpoint_high: numeric
+        aqi_low: integer
+        aqi_high: integer
+    pollutant_canonical_map:
+      +column_types:
+        source_pollutant: varchar
+        canonical_pollutant: varchar
+
+quoting:
+  database: false
+  schema: false
+  identifier: false

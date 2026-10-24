@@ -1,0 +1,43 @@
+# Production-lean overrides for the full stack.
+# Does not deploy to a cloud — hardens the local Compose shape for shared/staging hosts.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Differences from default (dev-friendly) compose:
+# - restart: always on long-running services
+# - Postgres / MinIO / Redpanda ports not published (API + dashboard + Dagster + MLflow remain)
+# - Redpanda developer-mode flags unchanged (still single-node; not a HA cluster)
+
+services:
+  postgres:
+    restart: always
+    ports: !reset []
+
+  minio:
+    restart: always
+    ports: !reset []
+
+  redpanda:
+    restart: always
+    ports: !reset []
+
+  poller:
+    restart: always
+
+  consumer:
+    restart: always
+
+  mlflow:
+    restart: always
+
+  dagster-webserver:
+    restart: always
+
+  dagster-daemon:
+    restart: always
+
+  api:
+    restart: always
+
+  dashboard:
+    restart: always

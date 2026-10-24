@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: staging_air_quality
+    description: >
+      Staging view over `raw.air_quality_observations`. Renames and casts only —
+      preserves one row per raw observation. Lineage: raw → staging.
+    columns:
+      - name: observation_sk
+        description: Surrogate key from raw (UUID).
+        tests:
+          - not_null
+          - unique
+      - name: station_id
+        tests:
+          - not_null
+      - name: pollutant_raw
+        description: Source pollutant label (lower-trimmed), not yet canonicalized.
+        tests:
+          - not_null
+      - name: value_raw
+        tests:
+          - not_null
+      - name: unit_raw
+        tests:
+          - not_null
+      - name: observed_at
+        tests:
+          - not_null
+      - name: ingested_at
+        tests:
+          - not_null
+      - name: source_name
+        tests:
+          - not_null
+      - name: raw_record_id
+        tests:
+          - not_null
+
+  - name: staging_weather
+    description: >
+      Staging view over `raw.weather_observations`. Renames and casts only.
+      Lineage: raw → staging.
+    columns:
+      - name: observation_sk
+        tests:
+          - not_null
+          - unique
+      - name: observed_at
+        tests:
+          - not_null
+      - name: latitude
+        tests:
+          - not_null
+      - name: longitude
+        tests:
+          - not_null
+      - name: ingested_at
+        tests:
+          - not_null
+      - name: source_name
+        tests:
+          - not_null
+      - name: raw_record_id
+        tests:
+          - not_null

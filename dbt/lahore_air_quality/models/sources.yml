@@ -1,0 +1,85 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Landing schema owned by the ingestion consumer. Append-only observations
+      with idempotent natural keys. dbt reads these tables; it never writes to `raw`.
+    schema: raw
+    loader: lahore_aqi_consumer
+    freshness:
+      warn_after: {count: 12, period: hour}
+      error_after: {count: 48, period: hour}
+    loaded_at_field: ingested_at
+    tables:
+      - name: air_quality_observations
+        description: >
+          Normalized pollutant readings from OpenAQ (and future AQ sources).
+          Unique on (source, station_id, pollutant, observed_at).
+        columns:
+          - name: id
+            description: Surrogate UUID primary key.
+            tests:
+              - not_null
+              - unique
+          - name: station_id
+            tests:
+              - not_null
+          - name: pollutant
+            tests:
+              - not_null
+          - name: value
+            tests:
+              - not_null
+          - name: unit
+            tests:
+              - not_null
+          - name: observed_at
+            tests:
+              - not_null
+          - name: ingested_at
+            tests:
+              - not_null
+          - name: source
+            tests:
+              - not_null
+          - name: raw_record_id
+            tests:
+              - not_null
+
+      - name: weather_observations
+        description: >
+          Weather snapshots from Open-Meteo (and future weather sources).
+          Unique on (source, latitude, longitude, observed_at).
+        columns:
+          - name: id
+            description: Surrogate UUID primary key.
+            tests:
+              - not_null
+              - unique
+          - name: observed_at
+            tests:
+              - not_null
+          - name: latitude
+            tests:
+              - not_null
+          - name: longitude
+            tests:
+              - not_null
+          - name: ingested_at
+            tests:
+              - not_null
+          - name: source
+            tests:
+              - not_null
+          - name: raw_record_id
+            tests:
+              - not_null
+
+      - name: ingestion_payloads
+        description: >
+          Original JSON envelopes archived for audit. Not used directly by marts;
+          listed for lineage completeness.
+        freshness:
+          warn_after: {count: 12, period: hour}
+          error_after: {count: 48, period: hour}

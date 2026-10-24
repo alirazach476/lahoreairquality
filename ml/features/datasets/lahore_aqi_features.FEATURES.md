@@ -1,0 +1,239 @@
+# lahore_aqi_features — ML feature dataset
+
+Generated: `2026-10-24T09:19:28.611378+00:00`
+
+## Source
+
+- Warehouse mart: `marts.mart_air_quality_features`
+- Grain: `['station_id', 'observed_hour']`
+- Rows: **336**
+- Time range: `2026-01-01T00:00:00+00:00` → `2026-01-07T23:00:00+00:00`
+
+## Leakage policy
+
+Features at timestamp T use only information available at or before T. Lags use T-k. Rolling windows are backward-looking. target_*_lead_* columns are labels for supervised learning and must not be used as model inputs.
+
+## Feature columns (196)
+
+Air quality (same-hour + lags [1, 2, 3, 6, 12, 24] + rolling windows [3, 6, 12, 24]
+× ['mean', 'std', 'min', 'max']), weather (same-hour), and calendar (hour, dow, month, weekend).
+
+- `pm25`
+- `pm10`
+- `o3`
+- `no2`
+- `so2`
+- `co`
+- `station_aqi`
+- `city_aqi`
+- `wx_temperature_c`
+- `wx_relative_humidity_pct`
+- `wx_wind_speed_ms`
+- `wx_wind_direction_deg`
+- `wx_pressure_hpa`
+- `wx_precipitation_mm`
+- `pm25_lag_1`
+- `pm25_lag_2`
+- `pm25_lag_3`
+- `pm25_lag_6`
+- `pm25_lag_12`
+- `pm25_lag_24`
+- `pm10_lag_1`
+- `pm10_lag_2`
+- `pm10_lag_3`
+- `pm10_lag_6`
+- `pm10_lag_12`
+- `pm10_lag_24`
+- `o3_lag_1`
+- `o3_lag_2`
+- `o3_lag_3`
+- `o3_lag_6`
+- `o3_lag_12`
+- `o3_lag_24`
+- `no2_lag_1`
+- `no2_lag_2`
+- `no2_lag_3`
+- `no2_lag_6`
+- `no2_lag_12`
+- `no2_lag_24`
+- `so2_lag_1`
+- `so2_lag_2`
+- `so2_lag_3`
+- `so2_lag_6`
+- `so2_lag_12`
+- `so2_lag_24`
+- `co_lag_1`
+- `co_lag_2`
+- `co_lag_3`
+- `co_lag_6`
+- `co_lag_12`
+- `co_lag_24`
+- `station_aqi_lag_1`
+- `station_aqi_lag_2`
+- `station_aqi_lag_3`
+- `station_aqi_lag_6`
+- `station_aqi_lag_12`
+- `station_aqi_lag_24`
+- `city_aqi_lag_1`
+- `city_aqi_lag_2`
+- `city_aqi_lag_3`
+- `city_aqi_lag_6`
+- `city_aqi_lag_12`
+- `city_aqi_lag_24`
+- `pm25_roll_3_mean`
+- `pm25_roll_3_std`
+- `pm25_roll_3_min`
+- `pm25_roll_3_max`
+- `pm25_roll_6_mean`
+- `pm25_roll_6_std`
+- `pm25_roll_6_min`
+- `pm25_roll_6_max`
+- `pm25_roll_12_mean`
+- `pm25_roll_12_std`
+- `pm25_roll_12_min`
+- `pm25_roll_12_max`
+- `pm25_roll_24_mean`
+- `pm25_roll_24_std`
+- `pm25_roll_24_min`
+- `pm25_roll_24_max`
+- `pm10_roll_3_mean`
+- `pm10_roll_3_std`
+- `pm10_roll_3_min`
+- `pm10_roll_3_max`
+- `pm10_roll_6_mean`
+- `pm10_roll_6_std`
+- `pm10_roll_6_min`
+- `pm10_roll_6_max`
+- `pm10_roll_12_mean`
+- `pm10_roll_12_std`
+- `pm10_roll_12_min`
+- `pm10_roll_12_max`
+- `pm10_roll_24_mean`
+- `pm10_roll_24_std`
+- `pm10_roll_24_min`
+- `pm10_roll_24_max`
+- `o3_roll_3_mean`
+- `o3_roll_3_std`
+- `o3_roll_3_min`
+- `o3_roll_3_max`
+- `o3_roll_6_mean`
+- `o3_roll_6_std`
+- `o3_roll_6_min`
+- `o3_roll_6_max`
+- `o3_roll_12_mean`
+- `o3_roll_12_std`
+- `o3_roll_12_min`
+- `o3_roll_12_max`
+- `o3_roll_24_mean`
+- `o3_roll_24_std`
+- `o3_roll_24_min`
+- `o3_roll_24_max`
+- `no2_roll_3_mean`
+- `no2_roll_3_std`
+- `no2_roll_3_min`
+- `no2_roll_3_max`
+- `no2_roll_6_mean`
+- `no2_roll_6_std`
+- `no2_roll_6_min`
+- `no2_roll_6_max`
+- `no2_roll_12_mean`
+- `no2_roll_12_std`
+- `no2_roll_12_min`
+- `no2_roll_12_max`
+- `no2_roll_24_mean`
+- `no2_roll_24_std`
+- `no2_roll_24_min`
+- `no2_roll_24_max`
+- `so2_roll_3_mean`
+- `so2_roll_3_std`
+- `so2_roll_3_min`
+- `so2_roll_3_max`
+- `so2_roll_6_mean`
+- `so2_roll_6_std`
+- `so2_roll_6_min`
+- `so2_roll_6_max`
+- `so2_roll_12_mean`
+- `so2_roll_12_std`
+- `so2_roll_12_min`
+- `so2_roll_12_max`
+- `so2_roll_24_mean`
+- `so2_roll_24_std`
+- `so2_roll_24_min`
+- `so2_roll_24_max`
+- `co_roll_3_mean`
+- `co_roll_3_std`
+- `co_roll_3_min`
+- `co_roll_3_max`
+- `co_roll_6_mean`
+- `co_roll_6_std`
+- `co_roll_6_min`
+- `co_roll_6_max`
+- `co_roll_12_mean`
+- `co_roll_12_std`
+- `co_roll_12_min`
+- `co_roll_12_max`
+- `co_roll_24_mean`
+- `co_roll_24_std`
+- `co_roll_24_min`
+- `co_roll_24_max`
+- `station_aqi_roll_3_mean`
+- `station_aqi_roll_3_std`
+- `station_aqi_roll_3_min`
+- `station_aqi_roll_3_max`
+- `station_aqi_roll_6_mean`
+- `station_aqi_roll_6_std`
+- `station_aqi_roll_6_min`
+- `station_aqi_roll_6_max`
+- `station_aqi_roll_12_mean`
+- `station_aqi_roll_12_std`
+- `station_aqi_roll_12_min`
+- `station_aqi_roll_12_max`
+- `station_aqi_roll_24_mean`
+- `station_aqi_roll_24_std`
+- `station_aqi_roll_24_min`
+- `station_aqi_roll_24_max`
+- `city_aqi_roll_3_mean`
+- `city_aqi_roll_3_std`
+- `city_aqi_roll_3_min`
+- `city_aqi_roll_3_max`
+- `city_aqi_roll_6_mean`
+- `city_aqi_roll_6_std`
+- `city_aqi_roll_6_min`
+- `city_aqi_roll_6_max`
+- `city_aqi_roll_12_mean`
+- `city_aqi_roll_12_std`
+- `city_aqi_roll_12_min`
+- `city_aqi_roll_12_max`
+- `city_aqi_roll_24_mean`
+- `city_aqi_roll_24_std`
+- `city_aqi_roll_24_min`
+- `city_aqi_roll_24_max`
+- `wx_wind_dir_sin`
+- `wx_wind_dir_cos`
+- `feat_hour`
+- `feat_day_of_week`
+- `feat_month`
+- `feat_is_weekend`
+
+## Target columns (labels only)
+
+- `target_station_aqi_lead_1`
+- `target_station_aqi_lead_3`
+- `target_station_aqi_lead_6`
+- `target_station_aqi_lead_12`
+- `target_station_aqi_lead_24`
+- `target_city_aqi_lead_1`
+- `target_city_aqi_lead_3`
+- `target_city_aqi_lead_6`
+- `target_city_aqi_lead_12`
+- `target_city_aqi_lead_24`
+- `target_pm25_lead_1`
+- `target_pm25_lead_3`
+- `target_pm25_lead_6`
+- `target_pm25_lead_12`
+- `target_pm25_lead_24`
+
+## Files
+
+- Parquet: `lahore_aqi_features.parquet`
+- Machine-readable metadata: `lahore_aqi_features.metadata.json`

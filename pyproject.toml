@@ -1,0 +1,128 @@
+[project]
+name = "lahore-air-quality"
+version = "0.1.0"
+description = "Lahore Air Quality Intelligence Platform — end-to-end air quality data, ML, API, and dashboard."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Lahore AQI Platform Contributors" },
+]
+keywords = ["air-quality", "aqi", "lahore", "data-engineering", "ml"]
+dependencies = [
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "sqlalchemy>=2.0",
+  "psycopg[binary]>=3.1",
+  "alembic>=1.13",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "ruff>=0.6",
+  "mypy>=1.11",
+]
+dbt = [
+  "dbt-postgres>=1.7,<2.0",
+]
+orchestration = [
+  "dagster>=1.7,<1.10",
+  "dagster-webserver>=1.7,<1.10",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Root package is a thin meta-project; installable workspace members live under apps/, ingestion/, ml/, orchestration/.
+[tool.hatch.build.targets.wheel]
+packages = ["src/lahore_air_quality"]
+
+[tool.uv.workspace]
+members = [
+  "apps/api",
+  "ingestion/poller",
+  "ingestion/consumer",
+  "ml",
+  "orchestration/dagster",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [
+  "src",
+  "apps/api/src",
+  "ingestion/poller/src",
+  "ingestion/consumer/src",
+  "ml/src",
+  "orchestration/dagster/src",
+  ".",
+]
+# Repo root on path enables ``python -m ingestion.poller`` and test imports.
+# Live external API tests are collected but skipped unless RUN_EXTERNAL_API_TESTS=1
+# (see tests/integration/conftest.py and docs/testing.md).
+addopts = "-q"
+markers = [
+  "integration: live external API tests (opt-in; RUN_EXTERNAL_API_TESTS=1)",
+  "postgres: tests that require a reachable PostgreSQL instance",
+  "smoke: end-to-end local ingestion pipeline (mocked external APIs; make smoke)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = [
+  "src",
+  "apps/api/src",
+  "ingestion/poller/src",
+  "ingestion/consumer/src",
+  "ml/src",
+  "orchestration/dagster/src",
+]
+exclude = [
+  ".git",
+  ".venv",
+  "venv",
+  "node_modules",
+  "dist",
+  "build",
+  "dbt/lahore_air_quality/dbt_packages",
+  "dbt/lahore_air_quality/target",
+  "dbt/lahore_air_quality/logs",
+  "ml/training/artifacts",
+  "ml/features/datasets",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = [
+  "E501",   # line length handled by formatter
+  "UP042",  # (str, Enum) remains intentional in several modules
+  "SIM105", # try/except pass is fine for teardown paths
+  "SIM108", # ternary not always clearer
+  "SIM117", # nested with pytest.raises is readable in tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/**/*.py" = ["E402"]
+"scripts/**/*.py" = ["F841"]
+"tests/**/*.py" = ["B017"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+mypy_path = [
+  "src",
+  "apps/api/src",
+  "ingestion/poller/src",
+  "ingestion/consumer/src",
+  "ml/src",
+  "orchestration/dagster/src",
+]

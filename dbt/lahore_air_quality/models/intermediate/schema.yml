@@ -1,0 +1,164 @@
+version: 2
+
+models:
+  - name: int_air_quality_deduplicated
+    description: >
+      Deduplicated air-quality observations (latest ingest wins per natural key).
+      Lineage: staging_air_quality → intermediate.
+    columns:
+      - name: observation_sk
+        tests: [not_null, unique]
+      - name: station_id
+        tests: [not_null]
+      - name: pollutant_raw
+        tests: [not_null]
+      - name: observed_at
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - source_name
+            - station_id
+            - pollutant_raw
+            - observed_at
+
+  - name: int_weather_deduplicated
+    description: >
+      Deduplicated weather observations (latest ingest wins).
+      Lineage: staging_weather → intermediate.
+    columns:
+      - name: observation_sk
+        tests: [not_null, unique]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - source_name
+            - latitude
+            - longitude
+            - observed_at
+
+  - name: int_air_quality_timestamps_normalized
+    description: >
+      UTC timestamps and `observed_hour` grain for air quality.
+    columns:
+      - name: observation_sk
+        tests: [not_null, unique]
+      - name: observed_at_utc
+        tests: [not_null]
+      - name: observed_hour
+        tests: [not_null]
+
+  - name: int_weather_timestamps_normalized
+    description: >
+      UTC timestamps and `observed_hour` grain for weather.
+    columns:
+      - name: observation_sk
+        tests: [not_null, unique]
+      - name: observed_hour
+        tests: [not_null]
+
+  - name: int_air_quality_pollutants_normalized
+    description: >
+      Canonical pollutant codes, unit normalization, and validity flags.
+      Invalid / unrecognized pollutants are retained with is_valid_pollutant=false.
+    columns:
+      - name: observation_sk
+        tests: [not_null, unique]
+      - name: pollutant
+        description: Canonical code (pm25, pm10, o3, no2, so2, co) or null if unrecognized.
+        tests:
+          - accepted_values:
+              values: ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co']
+              quote: true
+              config:
+                where: "is_recognized_pollutant"
+      - name: is_valid_pollutant
+        tests: [not_null]
+      - name: value
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+              config:
+                where: "is_valid_pollutant"
+
+  - name: int_weather_metrics_normalized
+    description: >
+      Physically plausible weather metrics with rounded coordinates.
+    columns:
+      - name: observation_sk
+        tests: [not_null, unique]
+      - name: temperature_c
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: -90
+              max_value: 60
+              config:
+                where: "temperature_c is not null"
+      - name: relative_humidity_pct
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              config:
+                where: "relative_humidity_pct is not null"
+      - name: wind_direction_deg
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 360
+              config:
+                where: "wind_direction_deg is not null"
+
+  - name: int_air_quality_aqi_subindex
+    description: >
+      Valid AQ observations with US EPA AQI sub-index when unit-compatible and
+      concentration is inside the published AQI 0–500 breakpoint range.
+      See docs/aqi.md. Out-of-range / wrong-unit rows keep aqi_subindex NULL.
+    columns:
+      - name: observation_sk
+        tests: [not_null, unique]
+      - name: pollutant
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co']
+              quote: true
+      - name: aqi_subindex
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 500
+              config:
+                where: "aqi_subindex is not null"
+      - name: aqi_status
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - ok
+                - below_supported_range
+                - above_supported_range
+                - invalid_unit
+                - insufficient_input
+              quote: true
+
+  - name: int_air_quality_weather_joined
+    description: >
+      Valid AQ observations left-joined to nearest same-hour weather snapshot.
+      Lineage hub before marts.
+    columns:
+      - name: observation_sk
+        tests: [not_null, unique]
+      - name: pollutant
+        tests: [not_null]
+      - name: observed_hour
+        tests: [not_null]
+      - name: weather_observation_sk
+        description: Nullable — weather is optional.
+        tests:
+          - relationships:
+              to: ref('int_weather_metrics_normalized')
+              field: observation_sk
+              config:
+                where: "weather_observation_sk is not null"

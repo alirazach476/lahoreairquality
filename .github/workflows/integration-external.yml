@@ -1,0 +1,60 @@
+# Opt-in live external API checks — NOT part of normal PR CI.
+# Requires network + optional OPENAQ_API_KEY repository secret.
+# Does not deploy.
+
+name: Integration (external APIs)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly; fails softly if secrets are missing.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  live-external-apis:
+    name: Live OpenAQ / Open-Meteo tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      RUN_EXTERNAL_API_TESTS: "1"
+      # Local CI placeholders for Settings (not used by live HTTP clients for auth
+      # except OpenAQ key below).
+      POSTGRES_PASSWORD: ci_password
+      AWS_ACCESS_KEY_ID: ci_minio
+      AWS_SECRET_ACCESS_KEY: ci_minio_secret
+      OPENAQ_API_KEY: ${{ secrets.OPENAQ_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            ingestion/poller/pyproject.toml
+
+      - name: Install packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install -e "./ingestion/poller"
+
+      - name: Check OpenAQ key (optional for Open-Meteo-only)
+        run: |
+          if [ -z "${OPENAQ_API_KEY}" ]; then
+            echo "::warning::OPENAQ_API_KEY secret is empty — OpenAQ live tests may skip or fail; Open-Meteo needs no key."
+          fi
+
+      - name: Pytest integration marker
+        run: |
+          echo "::group::pytest -m integration"
+          pytest -m integration -v --tb=short
+          echo "::endgroup::"

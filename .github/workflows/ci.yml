@@ -1,0 +1,275 @@
+# Normal CI — no production secrets, no live external APIs.
+# External / opt-in suites live in integration-external.yml.
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (format · lint · pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lahore
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: lahore_aqi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lahore -d lahore_aqi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Local CI database only — not production credentials.
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: lahore
+      POSTGRES_PASSWORD: ci_password
+      POSTGRES_DB: lahore_aqi
+      # Satisfy Settings validators without real cloud keys.
+      AWS_ACCESS_KEY_ID: ci_minio
+      AWS_SECRET_ACCESS_KEY: ci_minio_secret
+      # Keep live external API tests skipped.
+      RUN_EXTERNAL_API_TESTS: "0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            apps/api/pyproject.toml
+            ingestion/poller/pyproject.toml
+            ingestion/consumer/pyproject.toml
+            ml/pyproject.toml
+            orchestration/dagster/pyproject.toml
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install -e "./apps/api[dev]"
+          pip install -e "./ingestion/poller"
+          pip install -e "./ingestion/consumer"
+          pip install -e "./ml[dev]"
+          pip install -e "./orchestration/dagster"
+
+      - name: Format check (ruff)
+        run: |
+          echo "::group::ruff format --check"
+          if ! ruff format --check .; then
+            echo "::error::Formatting failed. Fix locally with: ruff format ."
+            exit 1
+          fi
+          echo "::endgroup::"
+
+      - name: Lint (ruff)
+        run: |
+          echo "::group::ruff check"
+          if ! ruff check .; then
+            echo "::error::Lint failed. Fix locally with: ruff check . --fix (then review)"
+            exit 1
+          fi
+          echo "::endgroup::"
+
+      - name: Apply database migrations
+        run: alembic upgrade head
+
+      - name: Pytest (unit + postgres; exclude live/smoke)
+        run: |
+          echo "::group::pytest"
+          echo "Excluded: integration (live external APIs), smoke (Compose e2e)"
+          if ! pytest -m "not integration and not smoke" -v --tb=short; then
+            echo "::error::Pytest failed. Re-run locally: pytest -m 'not integration and not smoke' -v --tb=short"
+            echo "Live external API tests are not in this job — see workflow Integration (external APIs)."
+            exit 1
+          fi
+          echo "::endgroup::"
+
+  frontend:
+    name: Frontend (npm ci · lint · build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/dashboard
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/dashboard/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            echo "::warning::package-lock.json missing — falling back to npm install"
+            npm install
+          fi
+
+      - name: Lint (TypeScript)
+        run: |
+          if ! npm run lint; then
+            echo "::error::Frontend typecheck failed. Fix locally: cd apps/dashboard && npm run lint"
+            exit 1
+          fi
+
+      - name: Build
+        env:
+          # Public API origin only — no secrets.
+          VITE_API_BASE_URL: http://localhost:8000
+        run: |
+          if ! npm run build; then
+            echo "::error::Frontend build failed. Fix locally: cd apps/dashboard && npm run build"
+            exit 1
+          fi
+
+  dbt-parse:
+    name: dbt (parse — no database)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: dbt/lahore_air_quality
+
+    env:
+      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/lahore_air_quality
+      # profiles.yml requires POSTGRES_PASSWORD even for parse resolution.
+      POSTGRES_PASSWORD: unused_for_parse
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dbt-postgres
+        run: |
+          python -m pip install --upgrade pip
+          pip install "dbt-postgres>=1.7,<2.0"
+
+      - name: dbt deps
+        run: dbt deps
+
+      - name: dbt parse
+        run: |
+          echo "::group::dbt parse"
+          if ! dbt parse --no-version-check; then
+            echo "::error::dbt parse failed (YAML/SQL graph). Fix in dbt/lahore_air_quality, then: dbt parse"
+            exit 1
+          fi
+          echo "::endgroup::"
+          echo "dbt project parsed successfully (no warehouse connection required)."
+
+  dbt-test:
+    name: dbt (seed · run · test — CI Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: [dbt-parse]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lahore
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: lahore_aqi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lahore -d lahore_aqi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: lahore
+      POSTGRES_PASSWORD: ci_password
+      POSTGRES_DB: lahore_aqi
+      AWS_ACCESS_KEY_ID: ci_minio
+      AWS_SECRET_ACCESS_KEY: ci_minio_secret
+      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/lahore_air_quality
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install platform + dbt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,dbt]"
+
+      - name: Create raw schemas (Alembic)
+        run: alembic upgrade head
+
+      - name: dbt deps
+        working-directory: dbt/lahore_air_quality
+        run: dbt deps
+
+      - name: dbt seed
+        working-directory: dbt/lahore_air_quality
+        run: |
+          echo "::group::dbt seed"
+          dbt seed --target dev
+          echo "::endgroup::"
+
+      - name: dbt run
+        working-directory: dbt/lahore_air_quality
+        run: |
+          echo "::group::dbt run"
+          dbt run --target dev
+          echo "::endgroup::"
+
+      - name: dbt test
+        working-directory: dbt/lahore_air_quality
+        run: |
+          echo "::group::dbt test"
+          if ! dbt test --target dev; then
+            echo "::error::dbt test failed against CI Postgres. Inspect the grouped log above; re-run: dbt test --target dev"
+            exit 1
+          fi
+          echo "::endgroup::"
+          echo "dbt tests completed against CI Postgres (empty raw sources are OK)."
